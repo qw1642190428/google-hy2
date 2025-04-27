@@ -12,32 +12,36 @@ fi
 PORT=$((RANDOM%10000+10000))
 PASSWORD=$(head -c 16 /dev/urandom | base64)
 
-# 交互输入ZeroTier网络ID
-read -p "请输入ZeroTier网络ID: " ZT_NET_ID
-
-# 安装ZeroTier
+# 检查ZeroTier是否已安装
 if ! command -v zerotier-cli &> /dev/null; then
   echo "正在安装ZeroTier..."
   curl -s https://install.zerotier.com | bash
+  systemctl enable zerotier-one
+  systemctl start zerotier-one
+else
+  echo "ZeroTier已安装，跳过安装步骤。"
+  systemctl enable zerotier-one
+  systemctl start zerotier-one
 fi
 
-# 启动ZeroTier服务
-systemctl enable zerotier-one
-systemctl start zerotier-one
-
-# 加入ZeroTier网络
-zerotier-cli join $ZT_NET_ID
-
-# 等待节点加入网络
-sleep 3
-
-# 自动列出当前节点已加入的所有ZeroTier网络
+# 检查当前已加入的ZeroTier网络及分配的IP
 NETWORK_LIST=$(zerotier-cli listnetworks | awk 'NR>1 {print NR-1 ") " $1 "  " $2 "  " $8}')
 NETWORK_COUNT=$(echo "$NETWORK_LIST" | wc -l)
+NETWORK_WITH_IP=$(echo "$NETWORK_LIST" | awk '$4 ~ /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print}')
 
-if [ "$NETWORK_COUNT" -eq 0 ]; then
-  echo "当前节点未加入任何ZeroTier网络，请检查网络ID或稍等片刻后重试。"
-  exit 1
+# 如果没有网络或没有分配IP，则提示输入网络ID并加入
+if [ "$NETWORK_COUNT" -eq 0 ] || [ -z "$NETWORK_WITH_IP" ]; then
+  echo "当前未检测到已分配IP的ZeroTier网络。"
+  read -p "请输入ZeroTier网络ID: " ZT_NET_ID
+  zerotier-cli join $ZT_NET_ID
+  sleep 3
+  # 重新获取网络列表
+  NETWORK_LIST=$(zerotier-cli listnetworks | awk 'NR>1 {print NR-1 ") " $1 "  " $2 "  " $8}')
+  NETWORK_COUNT=$(echo "$NETWORK_LIST" | wc -l)
+  if [ "$NETWORK_COUNT" -eq 0 ]; then
+    echo "当前节点未加入任何ZeroTier网络，请检查网络ID或稍等片刻后重试。"
+    exit 1
+  fi
 fi
 
 echo "\n当前节点已加入的ZeroTier网络："
