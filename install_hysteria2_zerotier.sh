@@ -25,49 +25,56 @@ else
 fi
 
 # 检查当前已加入的ZeroTier网络及分配的IP
-NETWORK_LIST=$(zerotier-cli listnetworks | awk 'NR>1 {print NR-1 ") " $1 "  " $2 "  " $8}')
-NETWORK_COUNT=$(echo "$NETWORK_LIST" | wc -l)
-NETWORK_WITH_IP=$(echo "$NETWORK_LIST" | awk '$4 ~ /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/ {print}')
+get_networks_with_ip() {
+  NETWORK_RAW=$(zerotier-cli listnetworks | tail -n +2)
+  NETWORK_LIST=$(echo "$NETWORK_RAW" | awk '{print NR ") " $1 "  " $2}')
+  NETWORK_IPS=()
+  while read -r line; do
+    NET_ID=$(echo "$line" | awk '{print $2}')
+    IPS=$(echo "$NETWORK_RAW" | grep "$NET_ID" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -n1)
+    if [[ -n "$IPS" ]]; then
+      NETWORK_IPS+=("$NET_ID:$IPS")
+    fi
+  done <<< "$NETWORK_LIST"
+}
+
+get_networks_with_ip
 
 # 如果没有网络或没有分配IP，则提示输入网络ID并加入
-if [ "$NETWORK_COUNT" -eq 0 ] || [ -z "$NETWORK_WITH_IP" ]; then
+if [ "${#NETWORK_IPS[@]}" -eq 0 ]; then
   echo "当前未检测到已分配IP的ZeroTier网络。"
   read -p "请输入ZeroTier网络ID: " ZT_NET_ID
   zerotier-cli join $ZT_NET_ID
   sleep 3
-  # 重新获取网络列表
-  NETWORK_LIST=$(zerotier-cli listnetworks | awk 'NR>1 {print NR-1 ") " $1 "  " $2 "  " $8}')
-  NETWORK_COUNT=$(echo "$NETWORK_LIST" | wc -l)
-  if [ "$NETWORK_COUNT" -eq 0 ]; then
-    echo "当前节点未加入任何ZeroTier网络，请检查网络ID或稍等片刻后重试。"
+  get_networks_with_ip
+  if [ "${#NETWORK_IPS[@]}" -eq 0 ]; then
+    echo "当前节点未加入任何ZeroTier网络或未分配IP，请检查网络ID或稍等片刻后重试。"
     exit 1
   fi
 fi
 
-echo "\n当前节点已加入的ZeroTier网络："
-echo "编号  网络ID         名称        分配IP"
-echo "$NETWORK_LIST"
-echo
+echo -e "\n当前节点已加入的ZeroTier网络："
+for i in "${!NETWORK_IPS[@]}"; do
+  NET_ID=$(echo "${NETWORK_IPS[$i]}" | cut -d: -f1)
+  IP=$(echo "${NETWORK_IPS[$i]}" | cut -d: -f2)
+  echo "$((i+1))) $NET_ID  $IP"
+done
 read -p "请输入你要使用的网络编号: " NET_CHOICE
-
-SELECTED_NET_ID=$(echo "$NETWORK_LIST" | awk -v n=$NET_CHOICE 'NR==n {print $2}')
-if [ -z "$SELECTED_NET_ID" ]; then
-  echo "选择无效，请检查输入。"
-  exit 1
-fi
+SELECTED_NET_ID=$(echo "${NETWORK_IPS[$((NET_CHOICE-1))]}" | cut -d: -f1)
+ZT_IP=$(echo "${NETWORK_IPS[$((NET_CHOICE-1))]}" | cut -d: -f2)
 
 # 获取本机ZeroTier Node ID
 ZT_NODE_ID=$(zerotier-cli info | awk '{print $3}')
 
-# 等待获取ZeroTier IP（延长至最多30次，每次2秒，约1分钟）
-ZT_IP=""
+# 再次确认IP（等待最多30次，每次2秒）
 for i in {1..30}; do
-  ZT_IP=$(zerotier-cli listnetworks | grep $SELECTED_NET_ID | awk '{print $8}' | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -n1)
   if [[ -n "$ZT_IP" ]]; then
     break
   fi
   echo "等待ZeroTier分配IP...\n请登录 https://my.zerotier.com/，在你的网络下授权本节点（Node ID: $ZT_NODE_ID）"
   sleep 2
+  get_networks_with_ip
+  ZT_IP=$(echo "${NETWORK_IPS[$((NET_CHOICE-1))]}" | cut -d: -f2)
 done
 if [[ -z "$ZT_IP" ]]; then
   echo "未能获取ZeroTier分配的IP，请检查网络和ZeroTier状态。"
