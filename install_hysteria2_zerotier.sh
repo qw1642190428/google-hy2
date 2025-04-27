@@ -97,9 +97,22 @@ if ! command -v hysteria &> /dev/null; then
   bash <(curl -fsSL https://get.hy2.sh/)
 fi
 
+# 自动生成自签名证书
+if [ ! -f /etc/hysteria/server.crt ] || [ ! -f /etc/hysteria/server.key ]; then
+  echo "正在生成自签名证书..."
+  mkdir -p /etc/hysteria
+  openssl req -x509 -nodes -newkey ec:<(openssl ecparam -name prime256v1) \
+    -keyout /etc/hysteria/server.key -out /etc/hysteria/server.crt \
+    -subj "/CN=bing.com" -days 36500
+  chown hysteria /etc/hysteria/server.key /etc/hysteria/server.crt 2>/dev/null || true
+fi
+
 # 生成歇斯底里2配置文件
 cat > /etc/hysteria/config.yaml <<EOF
 listen: :$PORT
+tls:
+  cert: /etc/hysteria/server.crt
+  key: /etc/hysteria/server.key
 auth:
   type: password
   password: "$PASSWORD"
