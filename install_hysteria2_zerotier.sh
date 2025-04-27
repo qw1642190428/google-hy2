@@ -28,13 +28,37 @@ systemctl start zerotier-one
 # 加入ZeroTier网络
 zerotier-cli join $ZT_NET_ID
 
+# 等待节点加入网络
+sleep 3
+
+# 自动列出当前节点已加入的所有ZeroTier网络
+NETWORK_LIST=$(zerotier-cli listnetworks | awk 'NR>1 {print NR-1 ") " $1 "  " $2 "  " $8}')
+NETWORK_COUNT=$(echo "$NETWORK_LIST" | wc -l)
+
+if [ "$NETWORK_COUNT" -eq 0 ]; then
+  echo "当前节点未加入任何ZeroTier网络，请检查网络ID或稍等片刻后重试。"
+  exit 1
+fi
+
+echo "\n当前节点已加入的ZeroTier网络："
+echo "编号  网络ID         名称        分配IP"
+echo "$NETWORK_LIST"
+echo
+read -p "请输入你要使用的网络编号: " NET_CHOICE
+
+SELECTED_NET_ID=$(echo "$NETWORK_LIST" | awk -v n=$NET_CHOICE 'NR==n {print $2}')
+if [ -z "$SELECTED_NET_ID" ]; then
+  echo "选择无效，请检查输入。"
+  exit 1
+fi
+
 # 获取本机ZeroTier Node ID
 ZT_NODE_ID=$(zerotier-cli info | awk '{print $3}')
 
 # 等待获取ZeroTier IP（延长至最多30次，每次2秒，约1分钟）
 ZT_IP=""
 for i in {1..30}; do
-  ZT_IP=$(zerotier-cli listnetworks | grep $ZT_NET_ID | awk '{print $8}' | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -n1)
+  ZT_IP=$(zerotier-cli listnetworks | grep $SELECTED_NET_ID | awk '{print $8}' | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -n1)
   if [[ -n "$ZT_IP" ]]; then
     break
   fi
