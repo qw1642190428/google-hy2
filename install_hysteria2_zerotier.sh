@@ -45,10 +45,18 @@ if [ "${#NETWORK_IPS[@]}" -eq 0 ]; then
   echo "当前未检测到已分配IP的ZeroTier网络。"
   read -p "请输入ZeroTier网络ID: " ZT_NET_ID
   zerotier-cli join $ZT_NET_ID
-  sleep 3
-  get_networks_with_ip
+  # 自动等待授权和分配IP，最多等待1分钟
+  for i in {1..30}; do
+    sleep 2
+    get_networks_with_ip
+    if [ "${#NETWORK_IPS[@]}" -gt 0 ]; then
+      break
+    fi
+    NODE_ID=$(zerotier-cli info | awk '{print $3}')
+    echo "等待ZeroTier分配IP...请登录 https://my.zerotier.com/ 授权本节点（Node ID: $NODE_ID）"
+  done
   if [ "${#NETWORK_IPS[@]}" -eq 0 ]; then
-    echo "当前节点未加入任何ZeroTier网络或未分配IP，请检查网络ID或稍等片刻后重试。"
+    echo "仍未分配到IP，请检查网络ID、授权状态或稍后重试。"
     exit 1
   fi
 fi
@@ -93,7 +101,8 @@ if ! command -v hysteria &> /dev/null; then
     ARCH=arm64
   fi
   VER=$(curl -s https://api.github.com/repos/apernet/hysteria/releases/latest | grep tag_name | cut -d '"' -f4)
-  wget -O hysteria.tar.gz https://github.com/apernet/hysteria/releases/download/${VER}/hysteria-linux-${ARCH}.tar.gz
+  VER_URLENCODED=$(echo "$VER" | sed 's|/|%2F|g')
+  wget -O hysteria.tar.gz "https://github.com/apernet/hysteria/releases/download/${VER_URLENCODED}/hysteria-linux-${ARCH}.tar.gz"
   tar -xzf hysteria.tar.gz -C /usr/local/bin hysteria
   chmod +x /usr/local/bin/hysteria
   rm -f hysteria.tar.gz
