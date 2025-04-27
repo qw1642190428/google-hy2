@@ -91,30 +91,15 @@ fi
 
 echo "ZeroTier分配的IP: $ZT_IP"
 
-# 下载歇斯底里2（Hysteria2）
+# 安装 Hysteria2（官方一键脚本）
 if ! command -v hysteria &> /dev/null; then
-  echo "正在下载歇斯底里2..."
-  ARCH=$(uname -m)
-  if [[ "$ARCH" == "x86_64" ]]; then
-    ARCH=amd64
-  elif [[ "$ARCH" == "aarch64" ]]; then
-    ARCH=arm64
-  fi
-  VER=$(curl -s https://api.github.com/repos/apernet/hysteria/releases/latest | grep tag_name | cut -d '"' -f4)
-  VER_URLENCODED=$(echo "$VER" | sed 's|/|%2F|g')
-  wget -O hysteria.tar.gz "https://github.com/apernet/hysteria/releases/download/${VER_URLENCODED}/hysteria-linux-${ARCH}.tar.gz"
-  tar -xzf hysteria.tar.gz -C /usr/local/bin hysteria
-  chmod +x /usr/local/bin/hysteria
-  rm -f hysteria.tar.gz
+  echo "正在安装歇斯底里2..."
+  bash <(curl -fsSL https://get.hy2.sh/)
 fi
 
 # 生成歇斯底里2配置文件
-cat > hysteria2_config.yaml <<EOF
+cat > /etc/hysteria/config.yaml <<EOF
 listen: :$PORT
-acme:
-  enabled: false
-  domains: []
-  email: ""
 auth:
   type: password
   password: "$PASSWORD"
@@ -125,10 +110,11 @@ masquerade:
     rewriteHost: true
 EOF
 
-echo "歇斯底里2配置文件已生成: hysteria2_config.yaml"
+echo "歇斯底里2配置文件已生成: /etc/hysteria/config.yaml"
 
-# 启动歇斯底里2服务
-nohup hysteria server -c hysteria2_config.yaml > hysteria2.log 2>&1 &
+# 启动/重启歇斯底里2服务
+systemctl restart hysteria-server.service
+systemctl enable hysteria-server.service
 
 # 生成分享链接
 SHARE_LINK="hysteria2://$PASSWORD@$ZT_IP:$PORT?insecure=1"
