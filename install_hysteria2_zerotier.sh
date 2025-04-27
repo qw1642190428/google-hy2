@@ -28,16 +28,18 @@ systemctl start zerotier-one
 # 加入ZeroTier网络
 zerotier-cli join $ZT_NET_ID
 
-# 等待获取ZeroTier IP
-sleep 5
+# 获取本机ZeroTier Node ID
+ZT_NODE_ID=$(zerotier-cli info | awk '{print $3}')
+
+# 等待获取ZeroTier IP（延长至最多30次，每次2秒，约1分钟）
 ZT_IP=""
-for i in {1..10}; do
+for i in {1..30}; do
   ZT_IP=$(zerotier-cli listnetworks | grep $ZT_NET_ID | awk '{print $8}' | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' | head -n1)
   if [[ -n "$ZT_IP" ]]; then
     break
   fi
+  echo "等待ZeroTier分配IP...\n请登录 https://my.zerotier.com/，在你的网络下授权本节点（Node ID: $ZT_NODE_ID）"
   sleep 2
-  echo "等待ZeroTier分配IP..."
 done
 if [[ -z "$ZT_IP" ]]; then
   echo "未能获取ZeroTier分配的IP，请检查网络和ZeroTier状态。"
