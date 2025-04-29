@@ -1,15 +1,19 @@
 #!/bin/bash
 
 set -e
+# 安装 unzip
+apt update
+apt install -y unzip
 
-echo ">>> 正在安装 Hysteria2 服务端..."
-
-# 下载 Hy2 最新版本
+# 下载 Hy2 最新版
 HY2_VER=$(curl -s https://api.github.com/repos/apernet/hysteria/releases/latest | grep tag_name | cut -d '"' -f 4)
-wget -O hy2.tar.gz "https://github.com/apernet/hysteria/releases/download/${HY2_VER}/hysteria-linux-amd64.tar.gz"
-tar -xvzf hy2.tar.gz
+wget -O hy2.zip "https://github.com/apernet/hysteria/releases/download/${HY2_VER}/hysteria-linux-amd64.zip"
+
+# 解压
+unzip hy2.zip
 chmod +x hysteria
 mv hysteria /usr/local/bin/hy2
+
 
 # 创建配置目录
 mkdir -p /etc/hysteria
