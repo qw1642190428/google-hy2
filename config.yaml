@@ -1,0 +1,27 @@
+listen:
+  udp: ":5666"  # 监听端口，随便选一个空闲端口
+  tls:
+    cert: "fullchain.pem"  # TLS证书
+    key: "privkey.pem"     # TLS私钥
+
+bandwidth:
+  up_mbps: 1500  # 上行速率 (本地到服务器)
+  down_mbps: 1500  # 下行速率 (服务器到本地)
+
+alpn:
+  - h3
+  - spdy/3.1
+  - h2
+
+congestion_control: cubic  # 不加引号也可以，最好保持简洁
+
+obfs:
+  type: none  # 不需要混淆
+
+quic:
+  init_stream_receive_window: 8388608
+  max_stream_receive_window: 16777216
+  init_conn_receive_window: 33554432
+  max_conn_receive_window: 67108864
+
+auth: qw010405
